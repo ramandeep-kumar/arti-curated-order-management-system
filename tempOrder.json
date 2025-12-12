@@ -1,0 +1,14 @@
+{
+  "firstName": "Alice",
+  "lastName": "Tester",
+  "email": "alice@example.com",
+  "street": "1 Test St",
+  "city": "Testville",
+  "zipCode": "12345",
+  "country": "US",
+  "items": [
+    { "productName": "Widget", "price": 10.00, "quantity": 1 }
+  ],
+  "shipping": 2.00,
+  "tax": 0.80
+}

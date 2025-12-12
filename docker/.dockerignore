@@ -1,0 +1,16 @@
+# Maven
+target/
+!target/*.jar
+
+# IDE
+.idea/
+*.iml
+
+# Git
+.git/
+
+# Docker
+docker/
+
+# Test files
+src/test/

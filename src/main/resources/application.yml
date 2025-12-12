@@ -1,0 +1,150 @@
+spring:
+  application:
+    name: articurated-order-system
+  
+  profiles:
+    active: local
+    
+  datasource:
+    url: jdbc:postgresql://localhost:5432/articurated
+    username: admin
+    password: admin
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: ArtiCuratedHikariPool
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+          order_inserts: true
+          order_updates: true
+        show_sql: false
+        use_sql_comments: false
+  
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: admin
+    password: password
+    connection-timeout: 30000
+    template:
+      retry:
+        enabled: true
+        max-attempts: 3
+        initial-interval: 1000
+    listener:
+      simple:
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1000
+  
+  flyway:
+    enabled: false
+    # locations: classpath:db/migration
+    # baseline-on-migrate: true
+    # validate-on-migrate: true
+
+server:
+  port: 8080
+  servlet:
+    context-path: /
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 10
+    max-connections: 8192
+    accept-count: 100
+    connection-timeout: 30000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+logging:
+  level:
+    com.articurated: INFO
+    org.springframework.statemachine: DEBUG
+    org.springframework.amqp: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+      
+  datasource:
+    url: jdbc:postgresql://db:5432/articurated
+    username: articurated
+    password: password
+  # Disable automatic resource handler mappings in the docker profile so
+  # the ResourceHttpRequestHandler does not preempt controller mappings
+  # (prevents requests like /api/... from being treated as static resources)
+  web:
+    resources:
+      add-mappings: false
+    
+  rabbitmq:
+    host: rabbitmq
+    port: 5672
+    username: admin
+    password: password
+
+logging:
+  level:
+    com.articurated: INFO
+    org.springframework.statemachine: INFO
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+      
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+    
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    
+  rabbitmq:
+  host: localhost
+  port: 5672
+  username: admin
+  password: password
+
+logging:
+  level:
+    com.articurated: DEBUG

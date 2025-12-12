@@ -1,0 +1,703 @@
+openapi: 3.0.3
+info:
+  title: ArtiCurated Order & Returns API
+  description: API surface for the ArtiCurated backend (orders, returns, health). Lightweight OpenAPI 3.0 spec for local development and client generation.
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /actuator/health:
+    get:
+      summary: Health check
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+  /actuator/info:
+    get:
+      summary: Application info
+      responses:
+        '200':
+          description: Info
+  /api/orders:
+    post:
+      summary: Create a new order
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrderRequest'
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: List orders (filter by customerEmail)
+      parameters:
+        - name: customerEmail
+          in: query
+          schema:
+            type: string
+          description: Filter by customer email
+      responses:
+        '200':
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+  /api/orders/{id}:
+    get:
+      summary: Get order by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Order
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '404':
+          description: Not found
+    put:
+      summary: Apply a state transition to an order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: event
+          in: query
+          required: true
+          schema:
+            type: string
+          description: State machine event (PAYMENT_RECEIVED, START_PROCESSING, SHIP_ORDER, DELIVER_ORDER, CANCEL_ORDER)
+      responses:
+        '200':
+          description: Transition applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Invalid transition
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/orders/{id}/history:
+  /api/orders/{id}/pay:
+    post:
+      summary: Mark order as paid (convenience endpoint)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Payment applied
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /api/orders/{id}/start-processing:
+    post:
+      summary: Move order to PROCESSING_IN_WAREHOUSE
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Order updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /api/orders/{id}/ship:
+    post:
+      summary: Ship order (triggers invoice generation)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Order shipped
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /api/orders/{id}/deliver:
+    post:
+      summary: Mark order as delivered
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Order delivered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /api/orders/{id}/cancel:
+    post:
+      summary: Cancel an order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Order canceled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+    get:
+      summary: Get order state history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: State history
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StateHistoryEntry'
+  /api/returns:
+    post:
+      summary: Create a return request (order must be DELIVERED)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReturnRequest'
+      responses:
+        '201':
+          description: Return created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+        '400':
+          description: Validation error or business rule failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+    get:
+      summary: List returns (filter by orderId)
+      parameters:
+        - name: orderId
+          in: query
+          schema:
+            type: integer
+          description: Filter returns for a given order
+      responses:
+        '200':
+          description: List of returns
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Return'
+  /api/returns/{id}:
+    get:
+      summary: Get return by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Return
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+        '404':
+          description: Not found
+    put:
+      summary: Approve or reject a return (manager actions)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: action
+          in: query
+          required: true
+          schema:
+            type: string
+          description: 'approve or reject'
+        - name: actor
+          in: query
+          required: false
+          schema:
+            type: string
+          description: 'who is approving/rejecting'
+      responses:
+        '200':
+          description: Return updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+  /api/returns/{id}/approve:
+    put:
+      summary: Approve a return (deprecated: use /api/returns/{id}?action=approve)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: approvedBy
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Return approved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+  /api/returns/{id}/reject:
+    put:
+      summary: Reject a return (deprecated: use /api/returns/{id}?action=reject)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: rejectedBy
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Return rejected
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+  /api/returns/orders/{orderId}/returns:
+    post:
+      summary: Create return nested under an order (alternate path)
+      parameters:
+        - name: orderId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReturnRequest'
+      responses:
+        '201':
+          description: Return created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+
+  /api/returns/{id}/in-transit:
+    put:
+      summary: Mark return as IN_TRANSIT (supply tracking number via query)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: trackingNumber
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Return marked in transit
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+
+  /api/returns/{id}/received:
+    put:
+      summary: Mark return as RECEIVED
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Return marked received
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+
+  /api/returns/{id}/complete:
+    put:
+      summary: Complete return and trigger refund processing
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Return completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Return'
+
+  /api/returns/{id}/refund:
+    get:
+      summary: Get refund processing status for a return
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Refund status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  processedAt:
+                    type: string
+                    format: date-time
+
+  /api/invoices:
+    post:
+      summary: Create an invoice (manual/testing endpoint)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateInvoiceRequest'
+      responses:
+        '201':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+    get:
+      summary: List invoices (filter by orderId)
+      parameters:
+        - name: orderId
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Invoice'
+
+  /api/invoices/{id}:
+    get:
+      summary: Get invoice by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+    put:
+      summary: Update invoice (used for pay/cancel convenience endpoints)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+
+  /api/invoices/{id}/pay:
+    put:
+      summary: Mark invoice paid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: paidBy
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invoice paid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+
+  /api/invoices/{id}/cancel:
+    put:
+      summary: Cancel an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: reason
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Invoice canceled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+
+components:
+  schemas:
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderNumber:
+          type: string
+        customerEmail:
+          type: string
+        subtotal:
+          type: number
+          format: double
+        tax:
+          type: number
+          format: double
+        shipping:
+          type: number
+          format: double
+        total:
+          type: number
+          format: double
+        currentState:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+    OrderItem:
+      type: object
+      properties:
+        productName:
+          type: string
+        price:
+          type: number
+          format: double
+        quantity:
+          type: integer
+        total:
+          type: number
+          format: double
+    CreateOrderRequest:
+      type: object
+      required: [customerEmail, items]
+      properties:
+        customerEmail:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+    StateHistoryEntry:
+      type: object
+      properties:
+        id:
+          type: integer
+        fromState:
+          type: string
+        toState:
+          type: string
+        changedBy:
+          type: string
+        reason:
+          type: string
+        changedAt:
+          type: string
+          format: date-time
+    Return:
+      type: object
+      properties:
+        id:
+          type: integer
+        returnNumber:
+          type: string
+        orderId:
+          type: integer
+        reason:
+          type: string
+        refundAmount:
+          type: number
+          format: double
+        currentState:
+          type: string
+        approvedBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    CreateReturnRequest:
+      type: object
+      required: [orderId, reason]
+      properties:
+        orderId:
+          type: integer
+        reason:
+          type: string
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        size:
+          type: integer
+        total:
+          type: integer
+    CreateInvoiceRequest:
+      type: object
+      required: [orderId]
+      properties:
+        orderId:
+          type: integer
+        metadata:
+          type: object
+          additionalProperties: true
+    Invoice:
+      type: object
+      properties:
+        id:
+          type: integer
+        orderId:
+          type: integer
+        status:
+          type: string
+        pdfUrl:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+tags:
+  - name: orders
+  - name: returns
