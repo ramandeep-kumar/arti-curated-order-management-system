@@ -29,7 +29,7 @@ import java.util.Comparator;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 public class Phase3E2EMessagingTest {
 
-    static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:3.8-management");
+    static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:3-management");
     static final String TMP_DIR = System.getProperty("java.io.tmpdir") + File.separator + "articurated-e2e-invoices";
 
     @BeforeAll

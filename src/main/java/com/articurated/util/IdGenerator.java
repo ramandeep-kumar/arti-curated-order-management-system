@@ -11,6 +11,6 @@ public final class IdGenerator {
      * Generate an order number with prefix ARTI- and zero-padded numeric id (6 digits).
      */
     public static String generateOrderNumber(long id) {
-        return String.format("ARTICURATE-%06d", id);
+        return String.format("ARTI-%06d", id);
     }
 }
