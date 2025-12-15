@@ -4,6 +4,7 @@ import com.articurated.order.domain.OrderEvent;
 import com.articurated.order.domain.OrderState;
 import com.articurated.shared.events.GenerateInvoiceEvent;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,7 +21,7 @@ import java.util.EnumSet;
 public class OrderStateMachineConfig {
     
     private final ApplicationEventPublisher eventPublisher;
-    private final com.articurated.invoice.service.app.InvoiceWriteService invoiceWriteService;
+    private final ObjectProvider<com.articurated.invoice.service.app.InvoiceWriteService> invoiceWriteServiceProvider;
     
     @Bean
     public StateMachineBuilder.Builder<OrderState, OrderEvent> stateMachineBuilder() throws Exception {
@@ -73,7 +74,10 @@ public class OrderStateMachineConfig {
                 // downstream consumers (and the invoices API) can find it. Keep publishing
                 // the GenerateInvoiceEvent for async PDF/email generation.
                 try {
-                    invoiceWriteService.generateInvoiceForOrder(orderId);
+                    var invoiceWriteService = invoiceWriteServiceProvider.getIfAvailable();
+                    if (invoiceWriteService != null) {
+                        invoiceWriteService.generateInvoiceForOrder(orderId);
+                    }
                 } catch (Exception e) {
                     // log and continue to publish event; generating the invoice should not
                     // block the shipping transition in normal operation
