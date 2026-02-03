@@ -15,9 +15,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.RabbitMQContainer;
+// Using an external RabbitMQ instance instead of Testcontainers
 
 import java.io.File;
 import java.time.Duration;
@@ -29,23 +30,18 @@ import java.util.Comparator;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 public class Phase3E2EMessagingTest {
 
-    static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:3-management");
     static final String TMP_DIR = System.getProperty("java.io.tmpdir") + File.separator + "articurated-e2e-invoices";
 
-    @BeforeAll
-    static void startRabbit() {
-        RABBIT.start();
-    }
-
-    @AfterAll
-    static void stopRabbit() {
-        RABBIT.stop();
-    }
+    // Read RabbitMQ connection info from system properties or environment variables
+    static final String RABBIT_HOST = System.getProperty("rabbit.host", System.getenv("RABBIT_HOST") != null ? System.getenv("RABBIT_HOST") : "localhost");
+    static final int RABBIT_PORT = Integer.parseInt(System.getProperty("rabbit.port", System.getenv("RABBIT_PORT") != null ? System.getenv("RABBIT_PORT") : "5672"));
+    static final String RABBIT_USERNAME = System.getProperty("rabbit.username", System.getenv("RABBIT_USERNAME") != null ? System.getenv("RABBIT_USERNAME") : "guest");
+    static final String RABBIT_PASSWORD = System.getProperty("rabbit.password", System.getenv("RABBIT_PASSWORD") != null ? System.getenv("RABBIT_PASSWORD") : "guest");
 
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry registry) {
-        registry.add("spring.rabbitmq.host", RABBIT::getHost);
-        registry.add("spring.rabbitmq.port", () -> RABBIT.getAmqpPort());
+        registry.add("spring.rabbitmq.host", () -> RABBIT_HOST);
+        registry.add("spring.rabbitmq.port", () -> RABBIT_PORT);
     // ensure invoice output dir is available to beans at creation time
     registry.add("invoices.output.dir", () -> TMP_DIR);
     // also set system property for cleanup and any direct constructions
@@ -53,6 +49,7 @@ public class Phase3E2EMessagingTest {
     }
 
     @Configuration
+    @Import(com.articurated.shared.config.RabbitMQConfig.class)
     static class TestConfig {
         @Bean
         public OrderService orderService() {
@@ -94,62 +91,15 @@ public class Phase3E2EMessagingTest {
 
         @Bean
         public org.springframework.amqp.rabbit.connection.CachingConnectionFactory connectionFactory() {
-            org.springframework.amqp.rabbit.connection.CachingConnectionFactory cf = new org.springframework.amqp.rabbit.connection.CachingConnectionFactory(RABBIT.getHost(), RABBIT.getAmqpPort());
-            // default guest/guest credentials
-            cf.setUsername(RABBIT.getAdminUsername());
-            cf.setPassword(RABBIT.getAdminPassword());
+            org.springframework.amqp.rabbit.connection.CachingConnectionFactory cf = new org.springframework.amqp.rabbit.connection.CachingConnectionFactory(RABBIT_HOST, RABBIT_PORT);
+            cf.setUsername(RABBIT_USERNAME);
+            cf.setPassword(RABBIT_PASSWORD);
             return cf;
         }
 
-        @Bean
-        public org.springframework.amqp.rabbit.core.RabbitTemplate rabbitTemplate(org.springframework.amqp.rabbit.connection.CachingConnectionFactory cf) {
-            org.springframework.amqp.rabbit.core.RabbitTemplate rt = new org.springframework.amqp.rabbit.core.RabbitTemplate(cf);
-            rt.setMessageConverter(new org.springframework.amqp.support.converter.Jackson2JsonMessageConverter());
-            return rt;
-        }
+        // rabbitTemplate is provided by imported RabbitMQConfig to avoid duplicate bean definitions
 
-        // Declare exchange, queues and bindings as beans so Spring's RabbitAdmin declares them
-        @Bean
-        public org.springframework.amqp.core.DirectExchange articuratedExchange() {
-            return new org.springframework.amqp.core.DirectExchange(RabbitMQConfig.EXCHANGE);
-        }
-
-        @Bean
-        public org.springframework.amqp.core.Queue invoiceQueue() {
-            return org.springframework.amqp.core.QueueBuilder.durable(RabbitMQConfig.INVOICE_QUEUE).build();
-        }
-
-        @Bean
-        public org.springframework.amqp.core.Queue refundQueue() {
-            return org.springframework.amqp.core.QueueBuilder.durable(RabbitMQConfig.REFUND_QUEUE).build();
-        }
-
-        @Bean
-        public org.springframework.amqp.core.Binding invoiceBinding(org.springframework.amqp.core.Queue invoiceQueue, org.springframework.amqp.core.DirectExchange articuratedExchange) {
-            return org.springframework.amqp.core.BindingBuilder.bind(invoiceQueue).to(articuratedExchange).with(RabbitMQConfig.INVOICE_ROUTING_KEY);
-        }
-
-        @Bean
-        public org.springframework.amqp.core.Binding refundBinding(org.springframework.amqp.core.Queue refundQueue, org.springframework.amqp.core.DirectExchange articuratedExchange) {
-            return org.springframework.amqp.core.BindingBuilder.bind(refundQueue).to(articuratedExchange).with(RabbitMQConfig.REFUND_ROUTING_KEY);
-        }
-
-        @Bean
-        public org.springframework.amqp.rabbit.core.RabbitAdmin rabbitAdmin(org.springframework.amqp.rabbit.connection.CachingConnectionFactory cf,
-                                                                              org.springframework.amqp.core.DirectExchange articuratedExchange,
-                                                                              org.springframework.amqp.core.Queue invoiceQueue,
-                                                                              org.springframework.amqp.core.Queue refundQueue,
-                                                                              org.springframework.amqp.core.Binding invoiceBinding,
-                                                                              org.springframework.amqp.core.Binding refundBinding) {
-            org.springframework.amqp.rabbit.core.RabbitAdmin admin = new org.springframework.amqp.rabbit.core.RabbitAdmin(cf);
-            // declare immediately to avoid race where publishing occurs before RabbitAdmin auto-declaration
-            admin.declareExchange(articuratedExchange);
-            admin.declareQueue(invoiceQueue);
-            admin.declareQueue(refundQueue);
-            admin.declareBinding(invoiceBinding);
-            admin.declareBinding(refundBinding);
-            return admin;
-        }
+        // Use the application's RabbitMQConfig for exchange/queues/bindings to match runtime topology
     }
 
     @Autowired
